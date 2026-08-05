@@ -1,0 +1,29 @@
+# CMake and Visual Studio output
+/build-win32/
+/out/
+/.vs/
+CMakeUserPresets.json
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.recipe
+*.tlog
+*.lastbuildstate
+
+# Local diagnostics and editor files
+*.log
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Intermediate document extraction/rendering
+/docx-extract/
+/docx-render/
+
+# Assets from the abandoned extended-help experiment
+/assets/force_ip.png
+/assets/weapon_panel.png
+/assets/wormnat.gif

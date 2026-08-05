@@ -1,0 +1,6 @@
+#include <windows.h>
+101 RCDATA "assets\\controls1.png"
+102 RCDATA "assets\\controls2.png"
+103 RCDATA "assets\\controls3.png"
+104 RCDATA "assets\\controls4.png"
+105 RCDATA "assets\\wa_logo.png"
