@@ -45,9 +45,6 @@ namespace {
 
 	DWORD addrSchemeStruct = 0;
 	DWORD addrGetSchemeVersion = 0;
-	int (__stdcall *origSetWscScheme)(DWORD schemestruct, char *path, char flag, bool *out) = nullptr;
-	int (__stdcall *origSetBuiltinScheme)(int a1, int schemeId) = nullptr;
-
 	std::string currentSchemeName;
 	std::filesystem::path currentSchemePath;
 	SchemeSourceKind currentSchemeSource = SchemeSourceKind::Unknown;
@@ -745,41 +742,22 @@ namespace {
 		return {};
 	}
 
-	int __stdcall hookSetWscScheme(DWORD schemestruct, char *path, char flag, bool *out) {
-		const int ret = origSetWscScheme ? origSetWscScheme(schemestruct, path, flag, out) : 0;
-		if (!out || *out) {
-			updateCurrentCustomScheme(path);
-		}
-		return ret;
-	}
-
-	int __stdcall hookSetBuiltinScheme(DWORD schemestruct, int schemeId) {
-		(void)schemestruct;
-		const int ret = origSetBuiltinScheme ? origSetBuiltinScheme(addrSchemeStruct, schemeId) : 0;
-		updateCurrentBuiltinScheme(schemeId);
-		return ret;
-	}
 }
 
 void SchemeInfo::install() {
 	Config::readConfig();
 	Hooks::loadOffsets();
 	const DWORD addrGetSchemeSettingsFromWam = _ScanPattern("GetSchemeSettingsFromWam", "\x57\x6A\x04\x68\x00\x00\x00\x00\x8B\xF8\xE8\x00\x00\x00\x00\x83\xF8\xFF\x75\x04\x0B\xC0\x5F\xC3\x8B\x47\x0C\x56\x8B\x35\x00\x00\x00\x00\x50\x6A\x00\x68\x00\x00\x00\x00\x68\x00\x00\x00\x00\xFF\xD6", "????????xxx????xxxxxxxxxxxxxxx????xxxx????x????xx");
-	const DWORD addrSetWscScheme = _ScanPattern("SetWscScheme", "\x6A\xFF\x68\x00\x00\x00\x00\x64\xA1\x00\x00\x00\x00\x50\x64\x89\x25\x00\x00\x00\x00\x81\xEC\x00\x00\x00\x00\x53\x55\x8B\xAC\x24\x00\x00\x00\x00\x56\x8B\xB4\x24\x00\x00\x00\x00\x57\x8D\x4C\x24\x20", "???????xx????xxxx????xx????xxxxx????xxxx????xxxxx");
 	addrGetSchemeVersion = _ScanPattern("GetSchemeVersion", "\xB8\x00\x00\x00\x00\xB9\x00\x00\x00\x00\x2B\xC8\x8D\x64\x24\x00\x8A\x94\x06\x00\x00\x00\x00\x3A\x14\x01\x75\x38\x83\xE8\x01\x75\xEF\x33\xC9\x8D\x86\x00\x00\x00\x00\x8D\xA4\x24\x00\x00\x00\x00", "??????????xxxxxxxxx????xxxxxxxxxxxxxx????xxx????");
 
 	addrSchemeStruct = *reinterpret_cast<DWORD *>(addrGetSchemeSettingsFromWam + 0x4);
-	const DWORD addrSetBuiltinScheme = addrGetSchemeSettingsFromWam + 0xF + *reinterpret_cast<DWORD *>(addrGetSchemeSettingsFromWam + 0xB);
-
-	_Hook("SetWscScheme", addrSetWscScheme, reinterpret_cast<DWORD *>(&hookSetWscScheme), reinterpret_cast<DWORD *>(&origSetWscScheme));
-	_Hook("SetBuiltinScheme", addrSetBuiltinScheme, reinterpret_cast<DWORD *>(&hookSetBuiltinScheme), reinterpret_cast<DWORD *>(&origSetBuiltinScheme));
 
 	const int builtinId = addrSchemeStruct ? *reinterpret_cast<int *>(addrSchemeStruct + 0x8) : 0;
 	if (builtinId > 0) {
 		updateCurrentBuiltinScheme(builtinId);
 	}
 
-	Diagnostics::log("SchemeInfo install: struct=0x%X getVersion=0x%X builtinId=%d", addrSchemeStruct, addrGetSchemeVersion, builtinId);
+	Diagnostics::log("SchemeInfo read-only install: struct=0x%X getVersion=0x%X builtinId=%d", addrSchemeStruct, addrGetSchemeVersion, builtinId);
 	Hooks::saveOffsets();
 }
 

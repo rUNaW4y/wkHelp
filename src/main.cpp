@@ -88,6 +88,7 @@ struct Config {
  std::wstring font=L"Worms Armageddon", fallback=L"Arial"; int helpHotkey='H',schemeHotkey='I'; bool startOpen=false;
 };
 HMODULE g_module{}; HANDLE g_stop{},g_thread{}; HWND g_panel{},g_game{}; Config g_cfg; ULONG_PTR g_gdip{};
+HHOOK g_mouseHook{};std::atomic<bool> g_mouseScrollEnabled{false};
 enum class PanelMode { Help, Scheme };
 std::unique_ptr<Image> g_img1,g_img2,g_img3,g_img4,g_logo; int g_scroll=0,g_contentHeight=1,g_viewHeight=1; bool g_open=false,g_chat=false;PanelMode g_mode=PanelMode::Help;
 
@@ -146,6 +147,7 @@ void paint(HDC dc,RECT rc){
   auto seconds=[](int value){return std::to_wstring(value)+L" s";};
   auto percent=[](int value){return std::to_wstring(value)+L"%";};
   auto fixed2=[](float value){wchar_t b[64]{};swprintf_s(b,L"%.2f",value);return std::wstring(b);};
+  auto weaponPower=[](uint8_t value){if(value<=4)return std::to_wstring((unsigned)value+1)+L" stars";return std::wstring(L"Raw ")+std::to_wstring((unsigned)value);};
   auto category=[&](const wchar_t*title){y+=8;float h=g_cfg.heading+g_cfg.rowPad*2;gr.FillRectangle(&categoryBg,(REAL)g_cfg.padding,y,(REAL)usable,h);StringFormat f;f.SetAlignment(StringAlignmentCenter);f.SetLineAlignment(StringAlignmentCenter);gr.DrawString(title,-1,&fh,RectF((REAL)g_cfg.padding,y,(REAL)usable,h),&f,&white);y+=h;alternate=false;};
   auto row=[&](const std::wstring&label,const std::wstring&value){RectF lb((REAL)(g_cfg.padding+8),y,(REAL)(labelW-16),2000),vb((REAL)(g_cfg.padding+labelW+8),y,(REAL)(usable-labelW-16),2000),lbo,vbo;gr.MeasureString(label.c_str(),-1,&fb,lb,&lbo);gr.MeasureString(value.c_str(),-1,&fb,vb,&vbo);float h=std::max(lbo.Height,vbo.Height)+g_cfg.rowPad*2;if(alternate){SolidBrush shade(Color(255,20,20,20));gr.FillRectangle(&shade,(REAL)g_cfg.padding,y,(REAL)usable,h);}gr.DrawLine(&grid,(REAL)g_cfg.padding,y+h,(REAL)(g_cfg.padding+usable),y+h);gr.DrawLine(&grid,(REAL)(g_cfg.padding+labelW),y,(REAL)(g_cfg.padding+labelW),y+h);gr.DrawString(label.c_str(),-1,&fb,RectF(lb.X,y+g_cfg.rowPad,lb.Width,h),nullptr,&white);gr.DrawString(value.c_str(),-1,&fb,RectF(vb.X,y+g_cfg.rowPad,vb.Width,h),nullptr,&white);y+=h;alternate=!alternate;};
   if(!s.valid){row(L"Status",L"No readable scheme is currently available.");}
@@ -159,7 +161,7 @@ void paint(HDC dc,RECT rc){
    const int weaponColumns[6]={0,40,55,70,82,100};const wchar_t*weaponHeaders[5]={L"Weapon",L"Ammo",L"Power",L"Delay",L"Probability"};StringFormat cellCenter;cellCenter.SetAlignment(StringAlignmentCenter);cellCenter.SetLineAlignment(StringAlignmentCenter);
    float weaponHeaderHeight=g_cfg.body*2.6f;SolidBrush headerBg(Color(255,32,32,32));gr.FillRectangle(&headerBg,(REAL)g_cfg.padding,y,(REAL)usable,weaponHeaderHeight);
    for(int c=0;c<5;c++){float x=(REAL)(g_cfg.padding+usable*weaponColumns[c]/100),w=(REAL)(usable*(weaponColumns[c+1]-weaponColumns[c])/100);gr.DrawString(weaponHeaders[c],-1,&fb,RectF(x,y,w,weaponHeaderHeight),&cellCenter,&white);if(c>0)gr.DrawLine(&grid,x,y,x,y+weaponHeaderHeight);}gr.DrawLine(&grid,(REAL)g_cfg.padding,y+weaponHeaderHeight,(REAL)(g_cfg.padding+usable),y+weaponHeaderHeight);y+=weaponHeaderHeight;alternate=false;
-   for(int i=0;i<s.weaponCount&&i<64;i++){const auto&w=s.weapons[i];std::wstring values[5]={kWeaponNames[i],(w.ammo==10||w.ammo<0)?L"Infinite":std::to_wstring((int)w.ammo),std::to_wstring((unsigned)w.power),std::to_wstring((int)w.delay),std::to_wstring((int)w.probability)};RectF nameBox((REAL)(g_cfg.padding+8),y,(REAL)(usable*40/100-16),1000),nameBounds;gr.MeasureString(values[0].c_str(),-1,&fb,nameBox,&nameBounds);float h=std::max((float)(g_cfg.body+g_cfg.rowPad*2),nameBounds.Height+g_cfg.rowPad*2);if(alternate){SolidBrush shade(Color(255,20,20,20));gr.FillRectangle(&shade,(REAL)g_cfg.padding,y,(REAL)usable,h);}for(int c=0;c<5;c++){float x=(REAL)(g_cfg.padding+usable*weaponColumns[c]/100),cw=(REAL)(usable*(weaponColumns[c+1]-weaponColumns[c])/100);if(c==0)gr.DrawString(values[c].c_str(),-1,&fb,RectF(x+8,y+g_cfg.rowPad,cw-16,h),nullptr,&white);else gr.DrawString(values[c].c_str(),-1,&fb,RectF(x,y,cw,h),&cellCenter,&white);if(c>0)gr.DrawLine(&grid,x,y,x,y+h);}gr.DrawLine(&grid,(REAL)g_cfg.padding,y+h,(REAL)(g_cfg.padding+usable),y+h);y+=h;alternate=!alternate;}
+   for(int i=0;i<s.weaponCount&&i<64;i++){const auto&w=s.weapons[i];std::wstring values[5]={kWeaponNames[i],(w.ammo==10||w.ammo<0)?L"Infinite":std::to_wstring((int)w.ammo),weaponPower(w.power),std::to_wstring((int)w.delay),std::to_wstring((int)w.probability)};RectF nameBox((REAL)(g_cfg.padding+8),y,(REAL)(usable*40/100-16),1000),nameBounds;gr.MeasureString(values[0].c_str(),-1,&fb,nameBox,&nameBounds);float h=std::max((float)(g_cfg.body+g_cfg.rowPad*2),nameBounds.Height+g_cfg.rowPad*2);if(alternate){SolidBrush shade(Color(255,20,20,20));gr.FillRectangle(&shade,(REAL)g_cfg.padding,y,(REAL)usable,h);}for(int c=0;c<5;c++){float x=(REAL)(g_cfg.padding+usable*weaponColumns[c]/100),cw=(REAL)(usable*(weaponColumns[c+1]-weaponColumns[c])/100);if(c==0)gr.DrawString(values[c].c_str(),-1,&fb,RectF(x+8,y+g_cfg.rowPad,cw-16,h),nullptr,&white);else gr.DrawString(values[c].c_str(),-1,&fb,RectF(x,y,cw,h),&cellCenter,&white);if(c>0)gr.DrawLine(&grid,x,y,x,y+h);}gr.DrawLine(&grid,(REAL)g_cfg.padding,y+h,(REAL)(g_cfg.padding+usable),y+h);y+=h;alternate=!alternate;}
    for(const wchar_t*command:{L"Skip Turn",L"Surrender"}){std::wstring values[5]={command,L"Infinite",L"N/A",L"N/A",L"N/A"};float h=(float)(g_cfg.body+g_cfg.rowPad*2);if(alternate){SolidBrush shade(Color(255,20,20,20));gr.FillRectangle(&shade,(REAL)g_cfg.padding,y,(REAL)usable,h);}for(int c=0;c<5;c++){float x=(REAL)(g_cfg.padding+usable*weaponColumns[c]/100),cw=(REAL)(usable*(weaponColumns[c+1]-weaponColumns[c])/100);if(c==0)gr.DrawString(values[c].c_str(),-1,&fb,RectF(x+8,y+g_cfg.rowPad,cw-16,h),nullptr,&white);else gr.DrawString(values[c].c_str(),-1,&fb,RectF(x,y,cw,h),&cellCenter,&white);if(c>0)gr.DrawLine(&grid,x,y,x,y+h);}gr.DrawLine(&grid,(REAL)g_cfg.padding,y+h,(REAL)(g_cfg.padding+usable),y+h);y+=h;alternate=!alternate;}
 
    auto optionalOnOff=[&](const std::optional<bool>&v){return v.has_value()?onOff(*v):std::wstring(L"Default");};
@@ -186,10 +188,12 @@ void paint(HDC dc,RECT rc){
  SolidBrush tr(Color(255,GetRValue(g_cfg.track),GetGValue(g_cfg.track),GetBValue(g_cfg.track))),th(Color(255,GetRValue(g_cfg.thumb),GetGValue(g_cfg.thumb),GetBValue(g_cfg.thumb)));int bx=(int)rc.right-g_cfg.bar;gr.FillRectangle(&tr,bx,0,g_cfg.bar,(int)rc.bottom);int vh=(int)rc.bottom;int hh=std::max(28,vh*vh/std::max(vh,g_contentHeight));int by=maxScroll?g_scroll*(vh-hh)/maxScroll:0;gr.FillRectangle(&th,bx+2,by,g_cfg.bar-4,hh);
 }
 void scrollBy(int d){g_scroll=std::clamp(g_scroll+d,0,std::max(0,g_contentHeight-g_viewHeight));InvalidateRect(g_panel,nullptr,FALSE);}
+LRESULT CALLBACK mouseHookProc(int code,WPARAM w,LPARAM l){if(code==HC_ACTION&&w==WM_MOUSEWHEEL&&g_mouseScrollEnabled.load()){const auto*data=reinterpret_cast<const MSLLHOOKSTRUCT*>(l);POINT pt=data->pt;RECT r{};if(g_panel&&GetWindowRect(g_panel,&r)&&PtInRect(&r,pt)){const int delta=GET_WHEEL_DELTA_WPARAM(data->mouseData);PostMessageW(g_panel,WM_APP+1,(WPARAM)delta,0);return 1;}}return CallNextHookEx(g_mouseHook,code,w,l);}
 LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
  if(m==WM_PAINT){PAINTSTRUCT ps{};HDC d=BeginPaint(h,&ps);RECT r{};GetClientRect(h,&r);HDC mem=CreateCompatibleDC(d);HBITMAP bmp=CreateCompatibleBitmap(d,r.right,r.bottom);HGDIOBJ old=SelectObject(mem,bmp);paint(mem,r);BitBlt(d,0,0,r.right,r.bottom,mem,0,0,SRCCOPY);SelectObject(mem,old);DeleteObject(bmp);DeleteDC(mem);EndPaint(h,&ps);return 0;}
  if(m==WM_MOUSEWHEEL){scrollBy(-GET_WHEEL_DELTA_WPARAM(w)/WHEEL_DELTA*g_cfg.wheel*(g_cfg.body+g_cfg.spacing));return 0;}
- if(m==WM_ERASEBKGND)return 1;if(m==WM_NCHITTEST)return HTCLIENT;return DefWindowProcW(h,m,w,l);
+ if(m==WM_APP+1){scrollBy(-(int)w/WHEEL_DELTA*g_cfg.wheel*(g_cfg.body+g_cfg.spacing));return 0;}
+ if(m==WM_ERASEBKGND)return 1;if(m==WM_NCHITTEST)return HTTRANSPARENT;return DefWindowProcW(h,m,w,l);
 }
 void positionPanel(float progress){
  RECT cr{};GetClientRect(g_game,&cr);POINT p{0,0};ClientToScreen(g_game,&p);int w=cr.right*g_cfg.widthPct/100,h=cr.bottom*g_cfg.heightPct/100,y=p.y+cr.bottom*g_cfg.topPct/100;int shown=p.x+cr.right-g_cfg.right-w,hidden=p.x+cr.right;int x=(int)(hidden+(shown-hidden)*progress);
@@ -207,10 +211,11 @@ DWORD WINAPI worker(LPVOID){
  bool schemeInfoInstalled=false;try{SchemeInfo::install();schemeInfoInstalled=true;Log::write("Scheme-info detection installed=1");}catch(const std::exception&e){Log::write("Scheme-info install failed: %s",e.what());}catch(...){Log::write("Scheme-info install failed: unknown exception");}
  GdiplusStartupInput in;const auto gdipStatus=GdiplusStartup(&g_gdip,&in,nullptr);g_img1=imageFromResource(101);g_img2=imageFromResource(102);g_img3=imageFromResource(103);g_img4=imageFromResource(104);g_logo=imageFromResource(105);
  Log::write("GDI+ status=%d; resources=%d,%d,%d,%d logo=%d", (int)gdipStatus, g_img1?1:0, g_img2?1:0, g_img3?1:0, g_img4?1:0, g_logo?1:0);
- WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=g_module;wc.lpszClassName=L"wkHelpOverlay";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);RegisterClassW(&wc);
- g_panel=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED,L"wkHelpOverlay",L"wkHelp",WS_POPUP,0,0,1,1,nullptr,nullptr,g_module,nullptr);
+ WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=g_module;wc.lpszClassName=L"wkHelpOverlay";wc.hCursor=nullptr;RegisterClassW(&wc);
+ g_panel=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED|WS_EX_TRANSPARENT,L"wkHelpOverlay",L"wkHelp",WS_POPUP,0,0,1,1,nullptr,nullptr,g_module,nullptr);
  Log::write("Overlay window creation: hwnd=0x%p error=%lu", g_panel, g_panel ? 0 : GetLastError());
  SetLayeredWindowAttributes(g_panel,0,(BYTE)std::clamp(g_cfg.opacity,20,255),LWA_ALPHA);
+ g_mouseHook=SetWindowsHookExW(WH_MOUSE_LL,mouseHookProc,g_module,0);Log::write("Mouse wheel hook installed=%d",g_mouseHook?1:0);
  g_open=g_cfg.startOpen;bool helpPrev=false,schemePrev=false,puPrev=false,pdPrev=false;DWORD animStart=GetTickCount();bool target=g_open;
  bool previousActive=false, previousMatch=false;DWORD matchStartedTick=0;
  while(WaitForSingleObject(g_stop,g_cfg.poll)==WAIT_TIMEOUT){
@@ -230,11 +235,12 @@ DWORD WINAPI worker(LPVOID){
   if(helpDown&&!helpPrev)handleModeKey(PanelMode::Help,"Help");
   if(schemeDown&&!schemePrev){if(schemeInfoInstalled){const auto snap=SchemeInfo::snapshot();Log::write("Scheme snapshot: valid=%d version=%d weapons=%d extendedBytes=%zu",snap.valid?1:0,snap.version,snap.weaponCount,snap.extraOptionsSize);handleModeKey(PanelMode::Scheme,"Scheme");}else Log::write("Scheme hotkey rejected: scheme detection unavailable");}
   helpPrev=helpDown;schemePrev=schemeDown;puPrev=pu;pdPrev=pd;
+  g_mouseScrollEnabled.store(active&&target&&!g_chat);
   if(!active){ShowWindow(g_panel,SW_HIDE);continue;} DWORD elapsed=GetTickCount()-animStart;float t=std::min(1.0f,elapsed/(float)std::max(1,g_cfg.anim));t=1-(1-t)*(1-t)*(1-t);float pr=target?t:1-t;positionPanel(pr);if(!target&&elapsed>=(DWORD)g_cfg.anim)ShowWindow(g_panel,SW_HIDE);
   if(target){if(GetAsyncKeyState(VK_UP)&1)scrollBy(-(g_cfg.body+g_cfg.spacing));if(GetAsyncKeyState(VK_DOWN)&1)scrollBy(g_cfg.body+g_cfg.spacing);if(GetAsyncKeyState(VK_PRIOR)&1)scrollBy(-g_viewHeight*8/10);if(GetAsyncKeyState(VK_NEXT)&1)scrollBy(g_viewHeight*8/10);if(GetAsyncKeyState(VK_HOME)&1){g_scroll=0;InvalidateRect(g_panel,nullptr,FALSE);}if(GetAsyncKeyState(VK_END)&1){g_scroll=std::max(0,g_contentHeight-g_viewHeight);InvalidateRect(g_panel,nullptr,FALSE);}}
  }
  Log::write("Worker shutting down");
- DestroyWindow(g_panel);GdiplusShutdown(g_gdip);return 0;
+ g_mouseScrollEnabled.store(false);if(g_mouseHook)UnhookWindowsHookEx(g_mouseHook);DestroyWindow(g_panel);GdiplusShutdown(g_gdip);return 0;
 }
 }
 BOOL APIENTRY DllMain(HMODULE h,DWORD reason,LPVOID reserved){

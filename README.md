@@ -26,7 +26,7 @@ It displays:
 - general match settings;
 - worm, map, mine, crate and Sudden Death settings;
 - game flags and weapon upgrades;
-- the complete 64-entry `.wsc` weapon table with Ammo, Power, Delay and Probability;
+- the complete 64-entry `.wsc` weapon table with Ammo, star-based Power, Delay and Probability;
 - Skip Turn and Surrender availability;
 - Extended Game Options grouped as Physics, Gameplay 1, Gameplay 2, Glitch Emulation, Input, Visual and RubberWorm.
 
@@ -63,7 +63,7 @@ During a match, with the chat closed:
 - pressing the other overlay hotkey switches directly between the two views;
 - use the mouse wheel, Up/Down, Page Up/Page Down, Home or End to navigate long content.
 
-The scrollbar currently provides a visual position indicator. Scrolling is performed with the mouse wheel or keyboard.
+The scrollbar currently provides a visual position indicator. Scrolling is performed with the mouse wheel or keyboard. The overlay is mouse-transparent, so it cannot steal focus, minimize a fullscreen game, or replace W:A's cursor.
 
 ## Configuration
 
@@ -171,7 +171,7 @@ The overlay is a non-activating, layered Win32 popup anchored to the W:A client 
 ## Known limitations
 
 - This build targets 32-bit Worms Armageddon and its current supported memory layouts.
-- The scrollbar is not draggable yet.
+- The scrollbar is not draggable because the overlay intentionally passes mouse clicks through to W:A.
 - Chat detection follows W:A's Page Down/Page Up chat controls.
 - Opening or interacting with a separate overlay window may behave differently with unusual fullscreen, mouse-driver or third-party overlay configurations.
 
